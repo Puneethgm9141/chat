@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>College Finder Chatbot</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Link to Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div id="chatContainer">
+        <div id="chatBox">
+            <div class="message bot">
+                <i class="fas fa-robot"></i>
+                <span>Welcome! How can I assist you today?</span>
+            </div>
+            <button id="checkRankButton" onclick="showRankInputs()">Check College by Rank</button>
+            <button id="collegeDetailsButton" onclick="showCollegeInput()">Get College Details</button>
+        </div>
+        
+        <!-- Rank Input Section -->
+        <div id="rankInputContainer" style="display:none;">
+            <input type="number" id="rankInput" placeholder="Enter rank" />
+            <select id="examType">
+                <option value="CET">CET</option>
+                <option value="COMEDK">COMEDK</option>
+            </select>
+            <button id="sendRankButton" onclick="sendRank()">Submit Rank</button>
+            <button onclick="hideRankInputs()">Back</button>
+        </div>
+        
+        <!-- College Input Section with Voice Search -->
+         <!-- using webkitSpeechRecognition-->
+        <div id="collegeInputContainer" style="display:none;">
+            <input type="text" id="collegeInput" placeholder="Enter college name" />
+            <button onclick="startVoiceRecognition()">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <button id="collegeButton" onclick="sendCollegeName()">Get College Details</button>
+            <button onclick="hideCollegeInput()">Back</button>
+        </div>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById("chatBox");
+        const rankInputContainer = document.getElementById("rankInputContainer");
+        const collegeInputContainer = document.getElementById("collegeInputContainer");
+
+        function addMessage(content, sender) {
+            const messageElement = document.createElement("div");
+            messageElement.classList.add("message", sender);
+
+            // Add icon based on sender type
+            const icon = document.createElement("i");
+            if (sender === "bot") {
+                icon.classList.add("fas", "fa-robot");
+            } else {
+                icon.classList.add("fas", "fa-user");
+            }
+
+            const textSpan = document.createElement("span");
+            textSpan.innerText = content;
+
+            messageElement.appendChild(icon);
+            messageElement.appendChild(textSpan);
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function showRankInputs() {
+            rankInputContainer.style.display = "block";
+            collegeInputContainer.style.display = "none";
+            addMessage("Please enter your rank and select the exam type.", "bot");
+            hideMainButtons();
+        }
+
+        function hideRankInputs() {
+            rankInputContainer.style.display = "none";
+            collegeInputContainer.style.display = "none";
+            addMessage("What would you like to do next?", "bot");
+            showMainButtons();
+        }
+
+        function showCollegeInput() {
+            collegeInputContainer.style.display = "block";
+            rankInputContainer.style.display = "none";
+            addMessage("Please enter the college name to get details.", "bot");
+            hideMainButtons();
+        }
+
+        function hideCollegeInput() {
+            collegeInputContainer.style.display = "none";
+            rankInputContainer.style.display = "none";
+            addMessage("What would you like to do next?", "bot");
+            showMainButtons();
+        }
+
+        function hideMainButtons() {
+            document.getElementById("checkRankButton").style.display = "none";
+            document.getElementById("collegeDetailsButton").style.display = "none";
+        }
+
+        function showMainButtons() {
+            document.getElementById("checkRankButton").style.display = "block";
+            document.getElementById("collegeDetailsButton").style.display = "block";
+        }
+
+        async function sendRank() {
+            const rank = document.getElementById("rankInput").value;
+            const examType = document.getElementById("examType").value;
+
+            if (!rank) {
+                addMessage("Please enter a valid rank.", "bot");
+                return;
+            }
+
+            addMessage(`Rank: ${rank}, Exam Type: ${examType}`, "user");
+
+            try {
+                const response = await fetch("http://127.0.0.1:5000/check_rank", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ rank: parseInt(rank), exam_type: examType })
+                });
+                
+                const data = await response.json();
+
+                if (data.colleges && data.colleges.length > 0) {
+                    addMessage("Here are the colleges that match your rank:", "bot");
+                    data.colleges.forEach(college => {
+                        addMessage(
+                            `College: ${college.clgname}\nDepartment: ${college.department}\nCET Rank Range: ${college.cet_rank_range}\nCOMEDK Rank Range: ${college.cometk_rank_range}`,
+                            "bot"
+                        );
+                    });
+                } else {
+                    addMessage(data.message || "Oops, sorry! No college found matching your rank.", "bot");
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                addMessage("An error occurred. Please try again later.", "bot");
+            }
+        }
+
+        async function sendCollegeName() {
+            const collegeName = document.getElementById("collegeInput").value;
+
+            if (!collegeName) {
+                addMessage("Please enter a college name.", "bot");
+                return;
+            }
+
+            addMessage(`College Name: ${collegeName}`, "user");
+
+            try {
+                const response = await fetch("http://127.0.0.1:5000/college_details", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ college_name: collegeName })
+                });
+                
+                const data = await response.json();
+
+                if (data.clgname) {
+                    addMessage(`College: ${data.clgname}\nAddress: ${data.address}\nCourses: ${data.courses.join(", ")}`, "bot");
+                } else {
+                    addMessage(data.message || "Oops, sorry! No details found for that college.", "bot");
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                addMessage("An error occurred. Please try again later.", "bot");
+            }
+        }
+
+        function startVoiceRecognition() {
+            if (!('webkitSpeechRecognition' in window)) {
+                addMessage("Sorry, your browser doesn't support voice recognition. Please use Google Chrome.", "bot");
+                return;
+            }
+
+            const recognition = new webkitSpeechRecognition();
+            recognition.lang = "en-US";
+            recognition.start();
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                document.getElementById("collegeInput").value = transcript;
+                addMessage(`Recognized College Name: ${transcript}`, "user");
+                sendCollegeName();  
+            };
+
+            recognition.onerror = (event) => {
+                addMessage("Voice recognition error. Please try again.", "bot");
+                console.error("Error in recognition:", event.error);
+            };
+        }
+    </script>
+</body>
+</html>
